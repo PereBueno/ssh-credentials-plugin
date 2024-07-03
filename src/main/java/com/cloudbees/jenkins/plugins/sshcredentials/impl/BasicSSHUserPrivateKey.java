@@ -32,12 +32,23 @@ import hudson.Extension;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
 import hudson.model.Items;
+import hudson.util.FormValidation;
 import hudson.util.Secret;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.io.StringReader;
+import java.security.Key;
+import java.security.PrivateKey;
+import java.security.UnrecoverableKeyException;
+//import java.security.interfaces.EdECPrivateKey;
+import java.security.interfaces.RSAPrivateKey;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -45,11 +56,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import jenkins.bouncycastle.api.PEMEncodable;
 import jenkins.model.Jenkins;
+import jenkins.security.FIPS140;
+import net.i2p.crypto.eddsa.EdDSAPrivateKey;
 import net.jcip.annotations.GuardedBy;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
+import org.bouncycastle.crypto.util.OpenSSHPrivateKeyUtil;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemReader;
 import org.kohsuke.stapler.DataBoundConstructor;
+
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * A simple username / password for use with SSH connections.
@@ -85,6 +104,7 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
     @GuardedBy("this")
     private transient long privateKeysLastModified;
 
+    private static final boolean FIPS_ENABLED = FIPS140.useCompliantAlgorithms();
     /**
      * Constructor for stapler.
      *
@@ -140,6 +160,7 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
                     getDescription()
             );
         }
+        isKeyFipsCompliant();
         return super.readResolve();
     }
 
@@ -171,6 +192,23 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
         return passphrase;
     }
 
+    private boolean isKeyFipsCompliant() {
+        try {
+            PEMEncodable pem = PEMEncodable.decode(privateKeySource.getPrivateKeys().get(0), passphrase.getPlainText().toCharArray());
+            PrivateKey privateKey = pem.toPrivateKey();
+            if (privateKey instanceof RSAPrivateKey) {
+                System.out.println("Size: " + ((RSAPrivateKey) privateKey).getModulus().bitCount());
+            }
+            System.out.println(pem.getPrivateKeyFingerprint());
+            System.out.println(pem.toPrivateKey().getAlgorithm());
+            System.out.println(pem.toPrivateKey().getFormat());
+            return true;
+        }catch (IOException ex) {
+            throw new IllegalArgumentException("Invalid key (not existing)");
+        }catch (UnrecoverableKeyException ex) {
+            throw  new IllegalArgumentException("Key can not be recovered with that passphrase (possibly wrong passphrase)");
+        }
+    }
     /**
      * {@inheritDoc}
      */
@@ -256,7 +294,12 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
 
         @DataBoundConstructor
         public DirectEntryPrivateKeySource(Secret privateKey) {
-            this.privateKey = privateKey;
+            if (FIPS_ENABLED){
+                isFipsCompliantKey(privateKey.getPlainText());
+                this.privateKey = privateKey; // to remove
+            }else {
+                this.privateKey = privateKey;
+            }
         }
 
         public DirectEntryPrivateKeySource(List<String> privateKeys) {
@@ -293,6 +336,20 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
             return true;
         }
 
+        private boolean isFipsCompliantKey(String plainKey) {
+//            byte[] decodedKey = Base64.getDecoder().decode(plainKey);
+//            PEMEncodable pemEncodable = PEMEncodable.decode(plainKey)
+//            PemReader pemReader = new PemReader(new StringReader(plainKey));
+//            try {
+//                PemObject pemObject = pemReader.readPemObject();
+//                System.out.println(pemObject.getType());
+//                System.out.println("Size " + pemObject.getContent().length );
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
+            return true;
+        }
+
         /**
          * {@inheritDoc}
          */
@@ -306,6 +363,11 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
             @Override
             public String getDisplayName() {
                 return Messages.BasicSSHUserPrivateKey_DirectEntryPrivateKeySourceDisplayName();
+            }
+
+            public FormValidation checkFipsCompliance() {
+
+                return FormValidation.ok();
             }
         }
     }
