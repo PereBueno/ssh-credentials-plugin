@@ -44,7 +44,7 @@ import java.io.StringReader;
 import java.security.Key;
 import java.security.PrivateKey;
 import java.security.UnrecoverableKeyException;
-//import java.security.interfaces.EdECPrivateKey;
+import java.security.interfaces.EdECPrivateKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -198,6 +198,8 @@ public class BasicSSHUserPrivateKey extends BaseSSHUser implements SSHUserPrivat
             PrivateKey privateKey = pem.toPrivateKey();
             if (privateKey instanceof RSAPrivateKey) {
                 System.out.println("Size: " + ((RSAPrivateKey) privateKey).getModulus().bitCount());
+            } else if (privateKey instanceof EdECPrivateKey) {
+                System.out.println("Size: " + ((EdECPrivateKey) privateKey).getBytes().get().length);
             }
             System.out.println(pem.getPrivateKeyFingerprint());
             System.out.println(pem.toPrivateKey().getAlgorithm());
