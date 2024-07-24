@@ -122,7 +122,7 @@
       <groupId>org.jenkins-ci.plugins</groupId>
       <artifactId>trilead-api</artifactId>
       <optional>true</optional>
-      <exclusions>
+      <exclusions> <!-- TODO: until https://github.com/jenkinsci/ssh-credentials-plugin/pull/206/ is merged -->
         <exclusion>
           <groupId>io.jenkins.plugins</groupId>
           <artifactId>eddsa-api</artifactId>
